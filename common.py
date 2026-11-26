@@ -131,40 +131,52 @@ def gemini(body, prefer=None, tools=None):
     tools: [{"google_search": {}}] 처럼 웹검색 도구를 넘길 수 있습니다(미지원 모델은 자동으로 빠집니다).
     """
     last = None
-    for model in gemini_candidates(prefer):
-        if model in _gemini["dead"]:
-            continue
-        b = dict(body)
-        if tools and model not in _gemini["no_tools"]:
-            b["tools"] = tools
-        slowed = False
-        while True:
-            try:
-                d = post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                         b, {"x-goog-api-key": os.environ["GEMINI_API_KEY"]})
-                _gemini["used"] = _gemini["preferred"] = model
-                return d, model
-            except Exception as e:
-                last = e
-                msg = str(e)
-                code = next((c for c in GEMINI_RETRY if f" {c}:" in msg), None)
-                if code is None and (isinstance(e, TimeoutError) or "timed out" in msg):
-                    code = "timeout"
-                if code is None:  # 403 같은 권한 문제는 모델을 바꿔도 같습니다
-                    raise
-                if code == "400" and "tool" in msg.lower() and "tools" in b:
-                    print(f"[참고] Gemini '{model}'은 웹검색 도구 미지원 → 도구 없이 재시도")
-                    _gemini["no_tools"].add(model)
-                    b.pop("tools", None)
-                    continue
-                if code == "404":
-                    _gemini["dead"].add(model)  # 이번 실행에서는 다시 안 물어봅니다
-                if code in ("429", "503") and not slowed:
-                    slowed = True
-                    time.sleep(3)
-                    continue
-                print(f"[참고] Gemini '{model}' 사용 불가({code}) → 다음 모델로")
-                break
+    for wait_round in (0, 1):
+        throttled = False
+        blocked_otherwise = False
+        for model in gemini_candidates(prefer):
+            if model in _gemini["dead"]:
+                continue
+            b = dict(body)
+            if tools and model not in _gemini["no_tools"]:
+                b["tools"] = tools
+            slowed = False
+            while True:
+                try:
+                    d = post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                             b, {"x-goog-api-key": os.environ["GEMINI_API_KEY"]})
+                    _gemini["used"] = _gemini["preferred"] = model
+                    return d, model
+                except Exception as e:
+                    last = e
+                    msg = str(e)
+                    code = next((c for c in GEMINI_RETRY if f" {c}:" in msg), None)
+                    if code is None and (isinstance(e, TimeoutError) or "timed out" in msg):
+                        code = "timeout"
+                    if code is None:  # 403 같은 권한 문제는 모델을 바꿔도 같습니다
+                        raise
+                    if code == "400" and "tool" in msg.lower() and "tools" in b:
+                        print(f"[참고] Gemini '{model}'은 웹검색 도구 미지원 → 도구 없이 재시도")
+                        _gemini["no_tools"].add(model)
+                        b.pop("tools", None)
+                        continue
+                    if code == "404":
+                        _gemini["dead"].add(model)  # 이번 실행에서는 다시 안 물어봅니다
+                    if code in ("429", "503") and not slowed:
+                        slowed = True
+                        time.sleep(3)
+                        continue
+                    print(f"[참고] Gemini '{model}' 사용 불가({code}) → 다음 모델로")
+                    if code in ("429", "503", "timeout"):
+                        throttled = True
+                    else:
+                        blocked_otherwise = True
+                    break
+        # 모든 모델이 한도·과부하로만 막혔으면 잠시 쉬었다가 한 번 더 시도합니다.
+        if not throttled or blocked_otherwise or wait_round == 1:
+            break
+        print("[참고] 모든 Gemini 모델이 한도·과부하 상태 → 60초 쉬고 다시 시도")
+        time.sleep(60)
     raise last or RuntimeError("Gemini 모델을 찾지 못했습니다.")
 
 

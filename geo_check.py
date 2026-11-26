@@ -103,7 +103,7 @@ def main():
                             "sources": src, "snippet": text[:400]})
             print(f"{'●' if in_text or in_src else '○'} {name:<10} {q}")
             if not DRY:
-                time.sleep(1)
+                time.sleep(6)  # 무료 키 분당 한도에 걸리지 않게 천천히
     models = {}
     if gemini_used():
         models["gemini"] = gemini_used()
