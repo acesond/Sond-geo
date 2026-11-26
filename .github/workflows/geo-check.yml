@@ -1,0 +1,47 @@
+name: geo-check
+
+on:
+  schedule:
+    - cron: "0 5 */2 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: geo-data
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 1. 분석 — AI 4개에 질문하고 노출 측정
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python geo_check.py
+      - name: 2. 실행 — 노출 약한 질문에 초안 쓰고 검수 이슈 만들기
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python write_drafts.py
+      - name: 대시보드 데이터 정리
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python sync_issues.py
+      - name: 결과 저장
+        run: |
+          git config user.name "geo-bot"
+          git config user.email "geo-bot@users.noreply.github.com"
+          git add docs/data
+          git commit -m "GEO 측정 $(date -u +%F)" || exit 0
+          git pull --rebase -X theirs && git push
