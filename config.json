@@ -1,0 +1,9 @@
+{
+ "brand_name": "10년차 가전매니저",
+ "openchat_name": "시크릿 핫딜방",
+ "openchat_link": "https://open.kakao.com/o/gwpqx5Xi",
+ "threads_handle": "@everyday_hotdeal",
+ "channels": ["threads", "blog"],
+ "max_drafts_per_run": 2,
+ "repost_after_days": 14
+}
