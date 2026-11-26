@@ -43,7 +43,8 @@ def http(method, url, body=None, headers=None):
             raw = r.read().decode()
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as e:
-        raise RuntimeError(f"{method} {url.split('?')[0]} → {e.code}: {e.read().decode()[:400]}") from None
+        detail = e.read().decode()
+        raise RuntimeError(f"{method} {url.split('?')[0]} → {e.code}: {detail[:900]}") from None
 
 
 def post(url, body, headers):
