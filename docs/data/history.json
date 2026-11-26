@@ -87,5 +87,94 @@
     "sources": []
    }
   ]
+ },
+ {
+  "run_at": "2026-11-26T09:43:41+00:00",
+  "results": [
+   {
+    "q": "쿠팡 가전 핫딜 정보 어디서 보면 좋아?",
+    "ai": "gemini",
+    "mentioned": false,
+    "cited": false,
+    "sources": []
+   },
+   {
+    "q": "카카오톡 핫딜 오픈채팅방 추천해줘",
+    "ai": "gemini",
+    "mentioned": false,
+    "cited": false,
+    "sources": []
+   },
+   {
+    "q": "육아용품 최저가 알림 받는 방법 알려줘",
+    "ai": "gemini",
+    "mentioned": false,
+    "cited": false,
+    "sources": []
+   },
+   {
+    "q": "기저귀 쿠팡에서 제일 싸게 사는 방법",
+    "ai": "gemini",
+    "mentioned": false,
+    "cited": false,
+    "sources": []
+   },
+   {
+    "q": "로봇청소기 할인 언제 사야 제일 싸?",
+    "ai": "gemini",
+    "mentioned": false,
+    "cited": false,
+    "sources": []
+   },
+   {
+    "q": "에어프라이어 핫딜 어디서 확인해?",
+    "ai": "gemini",
+    "mentioned": false,
+    "cited": false,
+    "sources": []
+   },
+   {
+    "q": "가전제품 할인 시즌은 언제야?",
+    "ai": "gemini",
+    "mentioned": false,
+    "cited": false,
+    "sources": []
+   },
+   {
+    "q": "스레드에서 팔로우할 만한 핫딜 계정 추천",
+    "ai": "gemini",
+    "mentioned": false,
+    "cited": false,
+    "sources": []
+   },
+   {
+    "q": "분유 물티슈 생활용품 핫딜 모아보는 곳",
+    "ai": "gemini",
+    "mentioned": false,
+    "cited": false,
+    "sources": []
+   },
+   {
+    "q": "가전 살 때 믿을 만한 추천 해주는 사람 있어?",
+    "ai": "gemini",
+    "mentioned": false,
+    "cited": false,
+    "sources": []
+   },
+   {
+    "q": "쿠팡 골드박스 놓치지 않는 방법",
+    "ai": "gemini",
+    "mentioned": false,
+    "cited": false,
+    "sources": []
+   },
+   {
+    "q": "신혼 가전 싸게 사는 팁",
+    "ai": "gemini",
+    "mentioned": false,
+    "cited": false,
+    "sources": []
+   }
+  ]
  }
 ]
