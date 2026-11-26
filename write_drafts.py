@@ -92,6 +92,10 @@ def issue_body(q, ch, body):
 
 def main():
     cfg = config()
+    if not any(os.environ.get(k) for k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY")):
+        print("[건너뜀] 초안 작성 키(ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY)가 없습니다. "
+              "측정 결과는 그대로 저장됩니다.")
+        return
     run = load_json("results.json", {})
     weak = weak_questions(run)
     print(f"노출 약한 질문 {len(weak)}개")
