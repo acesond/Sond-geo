@@ -92,8 +92,8 @@ def main():
             try:
                 text, src = ("(dry-run)", []) if DRY else fn(q)
             except Exception as e:  # 한 AI가 실패해도 나머지는 계속 측정
-                errors.append({"q": q, "ai": name, "error": str(e)[:300]})
-                print(f"[오류] {name} / {q}: {str(e)[:300]}")
+                errors.append({"q": q, "ai": name, "error": str(e)[:900]})
+                print(f"[오류] {name} / {q}: {str(e)[:900]}")
                 continue
             src = list(dict.fromkeys(s for s in src if s))[:10]
             in_text = bool(pat and pat.search(text))
