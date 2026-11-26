@@ -92,7 +92,7 @@ GEMINI_SKIP = ("tts", "image", "embedding", "audio", "live", "veo", "imagen", "r
 # 다시 시도해볼 만한 응답: 404(모델 없음) · 429(쿼터) · 503(과부하)
 GEMINI_RETRY = ("404", "429", "503")
 
-_gemini = {"models": None, "used": None, "preferred": None}
+_gemini = {"models": None, "used": None, "preferred": None, "dead": set(), "no_tools": set()}
 
 
 def gemini_available():
@@ -123,15 +123,23 @@ def gemini_candidates(prefer=None):
     return out
 
 
-def gemini(body, prefer=None):
+def gemini(body, prefer=None, tools=None):
     """Gemini generateContent 호출 → (응답 JSON, 쓴 모델 이름).
-    404·429·503이면 다음 모델로 넘어가고, 그 밖의 오류는 그대로 올립니다."""
+    404·429·503이면 다음 모델로 넘어가고, 그 밖의 오류는 그대로 올립니다.
+    tools: [{"google_search": {}}] 처럼 웹검색 도구를 넘길 수 있습니다(미지원 모델은 자동으로 빠집니다).
+    """
     last = None
     for model in gemini_candidates(prefer):
-        for attempt in (1, 2):
+        if model in _gemini["dead"]:
+            continue
+        b = dict(body)
+        if tools and model not in _gemini["no_tools"]:
+            b["tools"] = tools
+        slowed = False
+        while True:
             try:
                 d = post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                         body, {"x-goog-api-key": os.environ["GEMINI_API_KEY"]})
+                         b, {"x-goog-api-key": os.environ["GEMINI_API_KEY"]})
                 _gemini["used"] = _gemini["preferred"] = model
                 return d, model
             except Exception as e:
@@ -142,8 +150,16 @@ def gemini(body, prefer=None):
                     code = "timeout"
                 if code is None:  # 400·403 같은 설정 문제는 모델을 바꿔도 같습니다
                     raise
-                if code in ("429", "503") and attempt == 1:
-                    time.sleep(5)
+                if code == "400" and "tool" in msg.lower() and "tools" in b:
+                    print(f"[참고] Gemini '{model}'은 웹검색 도구 미지원 → 도구 없이 재시도")
+                    _gemini["no_tools"].add(model)
+                    b.pop("tools", None)
+                    continue
+                if code == "404":
+                    _gemini["dead"].add(model)  # 이번 실행에서는 다시 안 물어봅니다
+                if code in ("429", "503") and not slowed:
+                    slowed = True
+                    time.sleep(3)
                     continue
                 print(f"[참고] Gemini '{model}' 사용 불가({code}) → 다음 모델로")
                 break
