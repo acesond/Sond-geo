@@ -87,10 +87,12 @@ GEMINI_DEFAULT = "gemini-3.8-flash"
 GEMINI_PREF = ["gemini-3.8-flash", "gemini-3-flash", "gemini-3.8-flash-preview",
                "gemini-flash-latest", "gemini-flash-lite-latest",
                "gemini-2.5-flash", "gemini-2.0-flash"]
-# 텍스트 답변용이 아닌 모델(음성·이미지·임베딩)은 후보에서 뺍니다.
-GEMINI_SKIP = ("tts", "image", "embedding", "audio", "live", "veo", "imagen", "robotics")
-# 다시 시도해볼 만한 응답: 404(모델 없음) · 429(쿼터) · 503(과부하)
-GEMINI_RETRY = ("404", "429", "503")
+# 텍스트 답변용이 아닌 모델(음성·이미지·임베딩·실험 모델)은 후보에서 뺍니다.
+GEMINI_SKIP = ("tts", "image", "embedding", "audio", "live", "veo", "imagen", "robotics",
+               "antigravity", "omni", "vision", "learnlm", "gemma", "computer")
+# 다시 시도해볼 만한 응답: 404(모델 없음) · 429(쿼터) · 503(과부하) · 400(도구 미지원 등)
+GEMINI_RETRY = ("400", "404", "429", "503")
+MAX_MODELS = 10  # 질문 하나에 시도할 모델 수 상한(무료 키 쿼터 소모·실행 시간 억제)
 
 _gemini = {"models": None, "used": None, "preferred": None, "dead": set(), "no_tools": set()}
 
@@ -120,7 +122,7 @@ def gemini_candidates(prefer=None):
     for m in order:
         if m and m not in out:
             out.append(m)
-    return out
+    return out[:MAX_MODELS]
 
 
 def gemini(body, prefer=None, tools=None):
@@ -148,7 +150,7 @@ def gemini(body, prefer=None, tools=None):
                 code = next((c for c in GEMINI_RETRY if f" {c}:" in msg), None)
                 if code is None and (isinstance(e, TimeoutError) or "timed out" in msg):
                     code = "timeout"
-                if code is None:  # 400·403 같은 설정 문제는 모델을 바꿔도 같습니다
+                if code is None:  # 403 같은 권한 문제는 모델을 바꿔도 같습니다
                     raise
                 if code == "400" and "tool" in msg.lower() and "tools" in b:
                     print(f"[참고] Gemini '{model}'은 웹검색 도구 미지원 → 도구 없이 재시도")
