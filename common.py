@@ -79,6 +79,71 @@ def ensure_labels():
             gh("POST", "/labels", {"name": name, "color": color})
 
 
+# ---------- Gemini ----------
+# 구글이 모델을 단종·개편하면 404("no longer available ...")가 납니다.
+# 기본값은 최신 flash 모델, 404면 실제 사용 가능한 모델 목록에서 골라 다시 시도합니다.
+GEMINI_DEFAULT = "gemini-3.8-flash"
+GEMINI_PREF = ["gemini-3.8-flash", "gemini-3-flash", "gemini-3.8-flash-preview",
+               "gemini-2.5-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"]
+
+_gemini = {"models": None, "used": None}
+
+
+def gemini_available():
+    """이 키로 generateContent가 되는 모델 이름 목록(실패하면 빈 목록)."""
+    if _gemini["models"] is None:
+        _gemini["models"] = []
+        try:
+            d = http("GET", "https://generativelanguage.googleapis.com/v1beta/models?pageSize=200",
+                     None, {"x-goog-api-key": os.environ["GEMINI_API_KEY"]})
+            _gemini["models"] = [m.get("name", "").split("/")[-1] for m in d.get("models", []) or []
+                                 if "generateContent" in (m.get("supportedGenerationMethods") or [])]
+        except Exception as e:
+            print(f"[참고] Gemini 모델 목록 조회 실패: {str(e)[:160]}")
+    return _gemini["models"]
+
+
+def gemini_candidates(prefer=None):
+    """시도할 모델 이름 순서: 지정값 → 알려진 이름 → 목록의 flash 모델 → 나머지."""
+    avail = gemini_available()
+    flash = sorted([m for m in avail if "flash" in m], key=lambda n: ("latest" not in n, len(n), n))
+    order = [prefer or os.environ.get("GEMINI_MODEL") or GEMINI_DEFAULT] + GEMINI_PREF + flash + sorted(avail)
+    out = []
+    for m in order:
+        if m and m not in out:
+            out.append(m)
+    return out
+
+
+def gemini(body, prefer=None):
+    """Gemini generateContent 호출 → (응답 JSON, 쓴 모델 이름).
+    404(모델 단종·이름 변경)면 다음 후보로 넘어가고, 그 밖의 오류는 그대로 올립니다."""
+    last = None
+    for model in gemini_candidates(prefer):
+        try:
+            d = post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                     body, {"x-goog-api-key": os.environ["GEMINI_API_KEY"]})
+            _gemini["used"] = model
+            return d, model
+        except RuntimeError as e:
+            last = e
+            if "404" in str(e) or "not found" in str(e).lower():
+                print(f"[참고] Gemini 모델 '{model}' 없음 → 다음 후보로")
+                continue
+            raise
+    raise last or RuntimeError("Gemini 모델을 찾지 못했습니다.")
+
+
+def gemini_text(d):
+    cand = (d.get("candidates") or [{}])[0]
+    parts = (cand.get("content") or {}).get("parts") or []
+    return "".join(p.get("text", "") for p in parts if isinstance(p, dict)).strip()
+
+
+def gemini_used():
+    return _gemini["used"]
+
+
 # ---------- 초안 본문 형식 ----------
 START, END = "<!-- 본문 시작 (이 아래를 고쳐도 됩니다) -->", "<!-- 본문 끝 -->"
 

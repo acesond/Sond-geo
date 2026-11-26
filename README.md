@@ -24,13 +24,13 @@ Settings → Secrets and variables → Actions → New repository secret
 | 이름 | 어디서 | 용도 |
 |---|---|---|
 | `OPENAI_API_KEY` | platform.openai.com → API keys | ChatGPT 측정 (+ 초안 예비) |
-| `GEMINI_API_KEY` | aistudio.google.com → Get API key | Gemini 측정 |
+| `GEMINI_API_KEY` | aistudio.google.com → Get API key | Gemini 측정 + 초안 예비 |
 | `PERPLEXITY_API_KEY` | perplexity.ai → Settings → API | Perplexity 측정 |
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API keys | Claude 측정 + **초안 작성** |
 | `THREADS_ACCESS_TOKEN` | 아래 4) | 스레드 자동 게시 |
 | `THREADS_USER_ID` | 아래 4) | 스레드 자동 게시 |
 
-키는 있는 것만 넣어도 돌아갑니다(없는 AI는 건너뜀). 초안 작성에는 ANTHROPIC 또는 OPENAI 키 중 하나가 필요합니다.
+키는 있는 것만 넣어도 돌아갑니다(없는 AI는 건너뜀). 초안 작성은 ANTHROPIC → OPENAI → GEMINI 순서로 있는 키를 씁니다. Gemini 기본 모델은 `gemini-3.8-flash`이고, 구글이 모델을 단종하면 자동으로 살아있는 flash 모델로 바꿔 재시도합니다(`common.py`).
 비용 감: 질문 12개 × AI 4개 = 회당 48번 호출, 이틀에 한 번 → 한 달 15회. 웹검색 호출 요금이 대부분이라 한 달 1~2만 원 안쪽 예상 (모델·요금제에 따라 다름).
 
 ### 4) 스레드 자동 게시 토큰 (everyday_hotdeal 계정)

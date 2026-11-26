@@ -12,7 +12,7 @@
        python geo_check.py --dry-run  # API 호출 없이 형식만 확인
 """
 import os, re, sys, time, datetime
-from common import post, read_lines, load_json, save_json
+from common import post, gemini, gemini_text, gemini_used, read_lines, load_json, save_json
 
 DRY = "--dry-run" in sys.argv
 
@@ -36,14 +36,15 @@ def ask_openai(q):
 
 
 def ask_gemini(q):
-    key = os.environ["GEMINI_API_KEY"]
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-    d = post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-             {"contents": [{"parts": [{"text": ASK + q}]}], "tools": [{"google_search": {}}]},
-             {"x-goog-api-key": key})
+    # 모델은 common.gemini()가 고릅니다(기본 gemini-3.8-flash, 단종 시 자동 대체).
+    d, model = gemini({"contents": [{"parts": [{"text": ASK + q}]}],
+                       "tools": [{"google_search": {}}],
+                       "generationConfig": {"maxOutputTokens": 4096}})
     cand = (d.get("candidates") or [{}])[0]
-    text = "".join(p.get("text", "") for p in cand.get("content", {}).get("parts", []))
-    chunks = cand.get("groundingMetadata", {}).get("groundingChunks", [])
+    text = gemini_text(d)
+    if not text:
+        raise RuntimeError(f"{model}: 빈 응답 (finishReason={cand.get('finishReason')})")
+    chunks = (cand.get("groundingMetadata") or {}).get("groundingChunks", [])
     # 제미나이는 출처 URL이 리다이렉트 주소라 제목(도메인)도 함께 남깁니다
     src = [(c.get("web", {}).get("title") or "") + " " + (c.get("web", {}).get("uri") or "") for c in chunks]
     return text, [s.strip() for s in src if s.strip()]
@@ -102,8 +103,12 @@ def main():
             print(f"{'●' if in_text or in_src else '○'} {name:<10} {q}")
             if not DRY:
                 time.sleep(1)
+    models = {}
+    if gemini_used():
+        models["gemini"] = gemini_used()
     run = {"run_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
-           "brand": brand, "ais": [n for n, _ in active], "results": results, "errors": errors}
+           "brand": brand, "ais": [n for n, _ in active], "models": models,
+           "results": results, "errors": errors}
     save_json("results.json", run)
     hist = load_json("history.json", [])
     hist.append({"run_at": run["run_at"], "results": [{k: r[k] for k in ("q", "ai", "mentioned", "cited", "sources")} for r in results]})

@@ -1,9 +1,10 @@
 """
 노출 약한 질문 → AI가 글 초안 작성 → GitHub 이슈(검수대기)로 올립니다.
-초안 작성: ANTHROPIC_API_KEY(우선) 또는 OPENAI_API_KEY
+초안 작성: ANTHROPIC_API_KEY → OPENAI_API_KEY → GEMINI_API_KEY 순서로 있는 것을 씁니다.
 """
 import json, os, datetime
-from common import (config, load_json, post, gh, gh_issues, ensure_labels, meta_of, START, END)
+from common import (config, load_json, post, gh, gh_issues, ensure_labels, meta_of,
+                    gemini, gemini_text, gemini_used, START, END)
 
 
 def weak_questions(run):
@@ -65,8 +66,16 @@ def write(text_prompt):
                  {"Authorization": "Bearer " + os.environ["OPENAI_API_KEY"]})
         out = "".join(c.get("text", "") for it in d.get("output", []) for c in (it.get("content") or [])
                       if c.get("type") == "output_text")
+    elif os.environ.get("GEMINI_API_KEY"):
+        d, model = gemini({"contents": [{"parts": [{"text": text_prompt}]}],
+                           "generationConfig": {"responseMimeType": "application/json",
+                                                "maxOutputTokens": 8192}})
+        out = gemini_text(d)
+        print(f"초안 작성 모델: {model}")
+        if not out:
+            raise SystemExit("Gemini가 빈 초안을 돌려줬습니다.")
     else:
-        raise SystemExit("초안 작성용 키(ANTHROPIC_API_KEY 또는 OPENAI_API_KEY)가 없습니다.")
+        raise SystemExit("초안 작성용 키(ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY)가 하나도 없습니다.")
     a, b = out.find("{"), out.rfind("}")
     o = json.loads(out[a:b + 1])
     return str(o.get("title", "")).strip(), str(o.get("body", "")).strip()
