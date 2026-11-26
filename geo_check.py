@@ -36,10 +36,19 @@ def ask_openai(q):
 
 
 def ask_gemini(q):
-    # 모델은 common.gemini()가 고릅니다(기본 gemini-3.8-flash, 단종 시 자동 대체).
-    d, model = gemini({"contents": [{"parts": [{"text": ASK + q}]}],
-                       "tools": [{"google_search": {}}],
-                       "generationConfig": {"maxOutputTokens": 4096}})
+    # 모델은 common.gemini()가 고릅니다(기본 gemini-3.8-flash, 단종·과부하·쿼터 시 자동 대체).
+    body = {"contents": [{"parts": [{"text": ASK + q}]}],
+            "tools": [{"google_search": {}}],
+            "generationConfig": {"maxOutputTokens": 4096}}
+    try:
+        d, model = gemini(body)
+    except RuntimeError as e:
+        if " 400:" not in str(e):
+            raise
+        # 이 모델이 웹검색 도구를 안 받는 경우: 검색 없이 같은 모델로 재시도
+        print(f"[참고] gemini 웹검색 도구 거부(400) → 검색 없이 재시도")
+        body.pop("tools", None)
+        d, model = gemini(body)
     cand = (d.get("candidates") or [{}])[0]
     text = gemini_text(d)
     if not text:
@@ -120,4 +129,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import probe_geo
+    main()

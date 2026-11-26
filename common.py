@@ -1,5 +1,5 @@
 """공용 도구: 설정 읽기, HTTP 호출, GitHub API."""
-import json, os, urllib.request, urllib.parse, urllib.error
+import json, os, time, urllib.request, urllib.parse, urllib.error
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "docs", "data")
@@ -85,9 +85,14 @@ def ensure_labels():
 # 기본값은 최신 flash 모델, 404면 실제 사용 가능한 모델 목록에서 골라 다시 시도합니다.
 GEMINI_DEFAULT = "gemini-3.8-flash"
 GEMINI_PREF = ["gemini-3.8-flash", "gemini-3-flash", "gemini-3.8-flash-preview",
-               "gemini-2.5-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"]
+               "gemini-flash-latest", "gemini-flash-lite-latest",
+               "gemini-2.5-flash", "gemini-2.0-flash"]
+# 텍스트 답변용이 아닌 모델(음성·이미지·임베딩)은 후보에서 뺍니다.
+GEMINI_SKIP = ("tts", "image", "embedding", "audio", "live", "veo", "imagen", "robotics")
+# 다시 시도해볼 만한 응답: 404(모델 없음) · 429(쿼터) · 503(과부하)
+GEMINI_RETRY = ("404", "429", "503")
 
-_gemini = {"models": None, "used": None}
+_gemini = {"models": None, "used": None, "preferred": None}
 
 
 def gemini_available():
@@ -98,17 +103,19 @@ def gemini_available():
             d = http("GET", "https://generativelanguage.googleapis.com/v1beta/models?pageSize=200",
                      None, {"x-goog-api-key": os.environ["GEMINI_API_KEY"]})
             _gemini["models"] = [m.get("name", "").split("/")[-1] for m in d.get("models", []) or []
-                                 if "generateContent" in (m.get("supportedGenerationMethods") or [])]
+                                 if "generateContent" in (m.get("supportedGenerationMethods") or [])
+                                 and not any(s in m.get("name", "").lower() for s in GEMINI_SKIP)]
         except Exception as e:
             print(f"[참고] Gemini 모델 목록 조회 실패: {str(e)[:160]}")
     return _gemini["models"]
 
 
 def gemini_candidates(prefer=None):
-    """시도할 모델 이름 순서: 지정값 → 알려진 이름 → 목록의 flash 모델 → 나머지."""
+    """시도할 모델 이름 순서: 이번에 성공한 모델 → 지정값 → 알려진 이름 → 목록의 flash 모델 → 나머지."""
     avail = gemini_available()
     flash = sorted([m for m in avail if "flash" in m], key=lambda n: ("latest" not in n, len(n), n))
-    order = [prefer or os.environ.get("GEMINI_MODEL") or GEMINI_DEFAULT] + GEMINI_PREF + flash + sorted(avail)
+    named = [prefer or os.environ.get("GEMINI_MODEL") or GEMINI_DEFAULT] + GEMINI_PREF
+    order = ([_gemini["preferred"]] if (_gemini["preferred"] and not prefer) else []) + named + flash + sorted(avail)
     out = []
     for m in order:
         if m and m not in out:
@@ -118,20 +125,28 @@ def gemini_candidates(prefer=None):
 
 def gemini(body, prefer=None):
     """Gemini generateContent 호출 → (응답 JSON, 쓴 모델 이름).
-    404(모델 단종·이름 변경)면 다음 후보로 넘어가고, 그 밖의 오류는 그대로 올립니다."""
+    404·429·503이면 다음 모델로 넘어가고, 그 밖의 오류는 그대로 올립니다."""
     last = None
     for model in gemini_candidates(prefer):
-        try:
-            d = post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                     body, {"x-goog-api-key": os.environ["GEMINI_API_KEY"]})
-            _gemini["used"] = model
-            return d, model
-        except RuntimeError as e:
-            last = e
-            if "404" in str(e) or "not found" in str(e).lower():
-                print(f"[참고] Gemini 모델 '{model}' 없음 → 다음 후보로")
-                continue
-            raise
+        for attempt in (1, 2):
+            try:
+                d = post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                         body, {"x-goog-api-key": os.environ["GEMINI_API_KEY"]})
+                _gemini["used"] = _gemini["preferred"] = model
+                return d, model
+            except Exception as e:
+                last = e
+                msg = str(e)
+                code = next((c for c in GEMINI_RETRY if f" {c}:" in msg), None)
+                if code is None and (isinstance(e, TimeoutError) or "timed out" in msg):
+                    code = "timeout"
+                if code is None:  # 400·403 같은 설정 문제는 모델을 바꿔도 같습니다
+                    raise
+                if code in ("429", "503") and attempt == 1:
+                    time.sleep(5)
+                    continue
+                print(f"[참고] Gemini '{model}' 사용 불가({code}) → 다음 모델로")
+                break
     raise last or RuntimeError("Gemini 모델을 찾지 못했습니다.")
 
 
